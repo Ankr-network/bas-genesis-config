@@ -39,9 +39,9 @@ interface IStaking is IValidatorSet {
 
     function getValidatorByOwner(address owner) external view returns (address);
 
-    function registerValidator(address validator, uint16 commissionRate) payable external;
+    function registerValidator(address validator, bytes calldata votingKey, uint16 commissionRate) payable external;
 
-    function addValidator(address validator) external;
+    function addValidator(address validator, bytes calldata votingKey) external;
 
     function removeValidator(address validator) external;
 
@@ -54,6 +54,8 @@ interface IStaking is IValidatorSet {
     function changeValidatorCommissionRate(address validator, uint16 commissionRate) external;
 
     function changeValidatorOwner(address validator, address newOwner) external;
+
+    function changeVotingKey(address validatorAddress, bytes calldata newVotingKey) external;
 
     function getValidatorDelegation(address validator, address delegator) external view returns (
         uint256 delegatedAmount,
@@ -70,8 +72,6 @@ interface IStaking is IValidatorSet {
 
     function claimValidatorFee(address validator) external;
 
-    function claimValidatorFeeAtEpoch(address validator, uint64 beforeEpoch) external;
-
     function getDelegatorFee(address validator, address delegator) external view returns (uint256);
 
     function getPendingDelegatorFee(address validator, address delegator) external view returns (uint256);
@@ -80,9 +80,9 @@ interface IStaking is IValidatorSet {
 
     function calcAvailableForRedelegateAmount(address validator, address delegator) external view returns (uint256 amountToStake, uint256 rewardsDust);
 
-    function redelegateDelegatorFee(address validator) external;
+    function claimPendingUndelegates(address validator) external;
 
-    function claimDelegatorFeeAtEpoch(address validator, uint64 beforeEpoch) external;
+    function redelegateDelegatorFee(address validator) external;
 
     function slash(address validator) external;
 }

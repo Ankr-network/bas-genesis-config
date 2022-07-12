@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
-import "./Injector.sol";
+import "./InjectorContextHolder.sol";
 
 contract SystemReward is ISystemReward, InjectorContextHolder {
 
@@ -37,10 +37,28 @@ contract SystemReward is ISystemReward, InjectorContextHolder {
     // distribution share between holders
     DistributionShare[] internal _distributionShares;
 
-    constructor(bytes memory constructorParams) InjectorContextHolder(constructorParams) {
+    constructor(
+        IStaking stakingContract,
+        ISlashingIndicator slashingIndicatorContract,
+        ISystemReward systemRewardContract,
+        IStakingPool stakingPoolContract,
+        IGovernance governanceContract,
+        IChainConfig chainConfigContract,
+        IRuntimeUpgrade runtimeUpgradeContract,
+        IDeployerProxy deployerProxyContract
+    ) InjectorContextHolder(
+        stakingContract,
+        slashingIndicatorContract,
+        systemRewardContract,
+        stakingPoolContract,
+        governanceContract,
+        chainConfigContract,
+        runtimeUpgradeContract,
+        deployerProxyContract
+    ) {
     }
 
-    function ctor(address[] calldata accounts, uint16[] calldata shares) external whenNotInitialized {
+    function initialize(address[] calldata accounts, uint16[] calldata shares) external initializer {
         _updateDistributionShare(accounts, shares);
     }
 
@@ -49,14 +67,14 @@ contract SystemReward is ISystemReward, InjectorContextHolder {
     }
 
     function _updateDistributionShare(address[] calldata accounts, uint16[] calldata shares) internal {
-        require(accounts.length == shares.length, "SystemReward: bad length");
+        require(accounts.length == shares.length, "bad length");
         // force claim system fee before changing distribution share
         _claimSystemFee();
         uint16 totalShares = 0;
         for (uint256 i = 0; i < accounts.length; i++) {
             address account = accounts[i];
             uint16 share = shares[i];
-            require(share >= SHARE_MIN_VALUE && share <= SHARE_MAX_VALUE, "SystemReward: bad share distribution");
+            require(share >= SHARE_MIN_VALUE && share <= SHARE_MAX_VALUE, "bad share distribution");
             if (i >= _distributionShares.length) {
                 _distributionShares.push(DistributionShare(account, share));
             } else {
@@ -65,7 +83,7 @@ contract SystemReward is ISystemReward, InjectorContextHolder {
             emit DistributionShareChanged(account, share);
             totalShares += share;
         }
-        require(totalShares == SHARE_MAX_VALUE, "SystemReward: bad share distribution");
+        require(totalShares == SHARE_MAX_VALUE, "bad share distribution");
         assembly {
             sstore(_distributionShares.slot, accounts.length)
         }
@@ -81,6 +99,38 @@ contract SystemReward is ISystemReward, InjectorContextHolder {
 
     function claimSystemFee() external override {
         _claimSystemFee();
+    }
+
+    function distributeFinalityReward(address[] calldata validators, uint256[] calldata weights) external onlyFromCoinbase {
+        require(validators.length == weights.length);
+        // calc sum of the weight
+        uint256 totalWeight = 0;
+        for (uint256 i = 0; i < weights.length; i++) {
+            totalWeight += weights[i];
+        }
+        // distribute rewards
+        uint256 totalRewards = address(this).balance * _CHAIN_CONFIG_CONTRACT.getFinalityRewardRatio() / 1e4;
+        for (uint256 i = 0; i < validators.length; i++) {
+            uint256 validatorRewards = totalRewards * weights[i] / totalWeight;
+            _STAKING_CONTRACT.deposit{value: validatorRewards}(validators[i]);
+        }
+    }
+
+    struct VoteData {
+        uint256 sourceBlock;
+        bytes32 sourceHash;
+        uint256 targetBlock;
+        bytes32 targetHash;
+        bytes signature;
+    }
+
+    struct FinalityEvidence {
+        VoteData voteA;
+        VoteData voteB;
+        bytes voterPublicKey;
+    }
+
+    function submitFinalityViolationEvidence(FinalityEvidence calldata evidence) external {
     }
 
     receive() external payable {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
-import "./Injector.sol";
+import "./InjectorContextHolder.sol";
 
 contract ChainConfig is InjectorContextHolder, IChainConfig {
 
@@ -13,6 +13,7 @@ contract ChainConfig is InjectorContextHolder, IChainConfig {
     event UndelegatePeriodChanged(uint32 prevValue, uint32 newValue);
     event MinValidatorStakeAmountChanged(uint256 prevValue, uint256 newValue);
     event MinStakingAmountChanged(uint256 prevValue, uint256 newValue);
+    event FinalityRewardRatioChanged(uint16 prevValue, uint16 newValue);
 
     struct ConsensusParams {
         uint32 activeValidatorsLength;
@@ -23,14 +24,33 @@ contract ChainConfig is InjectorContextHolder, IChainConfig {
         uint32 undelegatePeriod;
         uint256 minValidatorStakeAmount;
         uint256 minStakingAmount;
+        uint16 finalityRewardRatio;
     }
 
     ConsensusParams private _consensusParams;
 
-    constructor(bytes memory constructorParams) InjectorContextHolder(constructorParams) {
+    constructor(
+        IStaking stakingContract,
+        ISlashingIndicator slashingIndicatorContract,
+        ISystemReward systemRewardContract,
+        IStakingPool stakingPoolContract,
+        IGovernance governanceContract,
+        IChainConfig chainConfigContract,
+        IRuntimeUpgrade runtimeUpgradeContract,
+        IDeployerProxy deployerProxyContract
+    ) InjectorContextHolder(
+        stakingContract,
+        slashingIndicatorContract,
+        systemRewardContract,
+        stakingPoolContract,
+        governanceContract,
+        chainConfigContract,
+        runtimeUpgradeContract,
+        deployerProxyContract
+    ) {
     }
 
-    function ctor(
+    function initialize(
         uint32 activeValidatorsLength,
         uint32 epochBlockInterval,
         uint32 misdemeanorThreshold,
@@ -38,8 +58,9 @@ contract ChainConfig is InjectorContextHolder, IChainConfig {
         uint32 validatorJailEpochLength,
         uint32 undelegatePeriod,
         uint256 minValidatorStakeAmount,
-        uint256 minStakingAmount
-    ) external whenNotInitialized {
+        uint256 minStakingAmount,
+        uint16 finalityRewardRatio
+    ) external initializer {
         _consensusParams.activeValidatorsLength = activeValidatorsLength;
         emit ActiveValidatorsLengthChanged(0, activeValidatorsLength);
         _consensusParams.epochBlockInterval = epochBlockInterval;
@@ -56,6 +77,8 @@ contract ChainConfig is InjectorContextHolder, IChainConfig {
         emit MinValidatorStakeAmountChanged(0, minValidatorStakeAmount);
         _consensusParams.minStakingAmount = minStakingAmount;
         emit MinStakingAmountChanged(0, minStakingAmount);
+        _consensusParams.finalityRewardRatio = finalityRewardRatio;
+        emit FinalityRewardRatioChanged(0, finalityRewardRatio);
     }
 
     function getActiveValidatorsLength() external view override returns (uint32) {
@@ -136,5 +159,15 @@ contract ChainConfig is InjectorContextHolder, IChainConfig {
         uint256 prevValue = _consensusParams.minStakingAmount;
         _consensusParams.minStakingAmount = newValue;
         emit MinStakingAmountChanged(prevValue, newValue);
+    }
+
+    function getFinalityRewardRatio() external view returns (uint16) {
+        return _consensusParams.finalityRewardRatio;
+    }
+
+    function setFinalityRewardRatio(uint16 newValue) external override onlyFromGovernance {
+        uint16 prevValue = _consensusParams.finalityRewardRatio;
+        _consensusParams.finalityRewardRatio = newValue;
+        emit FinalityRewardRatioChanged(prevValue, newValue);
     }
 }
